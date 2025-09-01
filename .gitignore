@@ -1,0 +1,6 @@
+# File: .gitignore (Stateless Edition)
+venv/
+__pycache__/
+.DS_Store
+.env
+credentials.json

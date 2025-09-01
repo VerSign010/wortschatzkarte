@@ -1,0 +1,73 @@
+<!-- File: app/templates/index.html (V11.1 - With Jump-to-Word) -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wortschatzkarte - 最终版</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+    <header class="app-header">
+        <div class="title-bar">
+            <h1>Wortschatzkarte 🇩🇪</h1>
+            <div class="game-stats">
+                <span id="score-display" title="总得分"><i data-feather="star"></i> 0</span>
+                <span id="streak-display" title="当前连胜"><i data-feather="zap"></i> 0</span>
+            </div>
+        </div>
+        <div class="settings">
+            <input type="url" id="sheet-url" placeholder="粘贴你的Google Sheet链接">
+            <button id="load-btn">加载/刷新</button>
+        </div>
+        <div class="controls">
+            <div class="mode-switch">
+                <label><input type="radio" name="mode" value="review" checked> 复习</label>
+                <label><input type="radio" name="mode" value="quiz"> 测验</label>
+            </div>
+            <label class="fav-toggle"><input type="checkbox" id="favorites-only-toggle"> 只看收藏</label>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <div id="status-bar" class="status-bar">请输入您的Google Sheet链接，然后点击“加载/刷新”。</div>
+        
+        <div id="flashcard-container" class="flashcard-container hidden">
+            <div id="flashcard" class="flashcard">
+                <div class="card-face card-front">
+                    <div id="image-container" class="image-container"></div>
+                    <div class="german-word-container">
+                        <p id="german-word" class="german-word"></p>
+                    </div>
+                </div>
+                <div class="card-face card-back">
+                    <p id="chinese-meaning" class="chinese-meaning"></p>
+                    <p id="example-sentence" class="example-sentence"></p>
+                </div>
+            </div>
+
+            <div id="quiz-area" class="quiz-area hidden">
+                <input type="text" id="answer-input" autocomplete="off" placeholder="输入德语答案...">
+                <button id="submit-answer-btn">提交</button>
+            </div>
+
+            <div class="card-actions">
+                <button id="pronounce-btn" title="发音"><i data-feather="volume-2"></i></button>
+                <button id="favorite-btn" title="收藏"><i data-feather="star"></i></button>
+            </div>
+        </div>
+
+        <div id="navigation" class="navigation hidden">
+            <button id="prev-btn">←</button>
+            <!-- Change: Added title attribute -->
+            <span id="card-counter" title="点击跳转">0 / 0</span>
+            <button id="next-btn">→</button>
+        </div>
+    </main>
+    
+    <div id="feedback-overlay" class="feedback-overlay"></div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
