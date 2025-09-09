@@ -1,8 +1,8 @@
-// File: app/static/js/app.js (V11.1 - With Jump-to-Word)
+// File: app/static/js/app.js (V12.1 - Autoplay Logic Fixed)
 document.addEventListener('DOMContentLoaded', () => {
     'use strict';
 
-    // --- 1. STATE: The single source of truth ---
+    // --- 1. STATE ---
     const state = {
         allWords: [],
         displayedWords: [],
@@ -11,9 +11,16 @@ document.addEventListener('DOMContentLoaded', () => {
         appMode: 'review',
         score: parseInt(localStorage.getItem('wortschatz_score_bedrock')) || 0,
         streak: parseInt(localStorage.getItem('wortschatz_streak_bedrock')) || 0,
+        autoplay: {
+            isPlaying: false,
+            timerId: null,
+            direction: 'forward',
+            frontDuration: 3,
+            backDuration: 5,
+        }
     };
 
-    // --- 2. DOM ELEMENTS: Direct, simple, and reliable ---
+    // --- 2. DOM ELEMENTS ---
     const els = {
         sheetUrl: document.getElementById('sheet-url'),
         loadBtn: document.getElementById('load-btn'),
@@ -38,9 +45,16 @@ document.addEventListener('DOMContentLoaded', () => {
         nextBtn: document.getElementById('next-btn'),
         cardCounter: document.getElementById('card-counter'),
         feedbackOverlay: document.getElementById('feedback-overlay'),
+        autoplayControls: document.getElementById('autoplay-controls'),
+        autoplayToggleBtn: document.getElementById('autoplay-toggle-btn'),
+        autoplaySettings: document.getElementById('autoplay-settings'),
+        autoplayDirForward: document.getElementById('autoplay-dir-forward'),
+        autoplayDirBackward: document.getElementById('autoplay-dir-backward'),
+        frontDurationInput: document.getElementById('front-duration'),
+        backDurationInput: document.getElementById('back-duration'),
     };
 
-    // --- 3. CORE LOGIC: Functions that do one thing well ---
+    // --- 3. CORE LOGIC ---
 
     function updateStatus(message, isError = false) {
         els.statusBar.textContent = message;
@@ -68,11 +82,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.displayedWords.length === 0) {
             els.flashcardContainer.classList.add('hidden');
             els.navigation.classList.add('hidden');
+            els.autoplayControls.classList.add('hidden');
             updateStatus(els.favoritesOnlyToggle.checked ? '没有收藏的词汇' : '词汇表为空, 请加载');
             return;
         }
         els.flashcardContainer.classList.remove('hidden');
         els.navigation.classList.remove('hidden');
+        els.autoplayControls.classList.remove('hidden');
         els.statusBar.classList.add('hidden');
 
         const word = state.displayedWords[state.currentIndex];
@@ -81,11 +97,19 @@ document.addEventListener('DOMContentLoaded', () => {
         els.cardCounter.textContent = `${state.currentIndex + 1} / ${state.displayedWords.length}`;
         els.germanWord.textContent = (state.appMode === 'review') ? word.german : '???';
         els.quizArea.classList.toggle('hidden', state.appMode === 'review');
+        
+        // [核心修复] 无论何种情况，渲染新卡片时都必须确保它是正面
         els.flashcard.classList.remove('is-flipped');
+        
         if (state.appMode === 'quiz') els.answerInput.value = '';
         
         els.favoriteBtn.classList.toggle('active', state.favorites.has(word.id));
         loadImage(word.german);
+
+        // 渲染完成后，如果正在自动播放，则启动定时器
+        if (state.autoplay.isPlaying) {
+            startAutoplayTimer();
+        }
     }
 
     function filterAndNavigate() {
@@ -100,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function navigate(direction) {
         if (state.displayedWords.length === 0) return;
         const len = state.displayedWords.length;
-        if (direction === 'next') {
+        if (direction === 'next' || direction === 'forward') {
             state.currentIndex = (state.currentIndex + 1) % len;
         } else {
             state.currentIndex = (state.currentIndex - 1 + len) % len;
@@ -161,8 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
         els.germanWord.textContent = word.german;
         els.flashcard.classList.remove('is-flipped');
         
-        // Visual feedback can be added here if desired
-        
         setTimeout(() => {
             navigate('next');
             els.submitAnswerBtn.disabled = false;
@@ -170,7 +192,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showJumpInput() {
-        if (document.getElementById('jump-to-input')) return; // Prevent multiple inputs
+        if (document.getElementById('jump-to-input')) return;
 
         const currentCounter = els.cardCounter;
         const input = document.createElement('input');
@@ -180,21 +202,20 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const handleJump = () => {
             const targetPage = parseInt(input.value, 10);
-            // Restore the span element before doing anything else
             input.replaceWith(currentCounter);
             
             if (!isNaN(targetPage) && targetPage > 0 && targetPage <= state.displayedWords.length) {
-                state.currentIndex = targetPage - 1; // Convert 1-based page to 0-based index
+                state.currentIndex = targetPage - 1;
                 renderCard();
                 saveSession();
+            } else {
+                renderCard();
             }
         };
 
         input.addEventListener('blur', handleJump);
         input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                input.blur(); // Trigger the blur event to handle the jump
-            }
+            if (e.key === 'Enter') input.blur();
         });
 
         currentCounter.replaceWith(input);
@@ -202,17 +223,71 @@ document.addEventListener('DOMContentLoaded', () => {
         input.select();
     }
 
-    // --- 4. INITIALIZATION & EVENT LISTENERS ---
+    function startAutoplayTimer() {
+        clearTimeout(state.autoplay.timerId);
+
+        const isFlipped = els.flashcard.classList.contains('is-flipped');
+        const duration = (isFlipped ? state.autoplay.backDuration : state.autoplay.frontDuration) * 1000;
+
+        state.autoplay.timerId = setTimeout(() => {
+            if (!isFlipped) {
+                // 如果在正面，则翻到背面，并重新启动定时器
+                els.flashcard.classList.add('is-flipped');
+                startAutoplayTimer(); // [核心修复] 重新调用自身以设置背面停留时间
+            } else {
+                // 如果在背面，则移动到下一个单词
+                navigate(state.autoplay.direction);
+            }
+        }, duration);
+    }
+
+    function toggleAutoplay() {
+        state.autoplay.isPlaying = !state.autoplay.isPlaying;
+        
+        const icon = state.autoplay.isPlaying ? 'pause' : 'play';
+        els.autoplayToggleBtn.innerHTML = `<i data-feather="${icon}"></i>`;
+        feather.replace();
+        els.autoplayToggleBtn.classList.toggle('playing', state.autoplay.isPlaying);
+        els.autoplaySettings.classList.toggle('collapsed', !state.autoplay.isPlaying);
+
+        if (state.autoplay.isPlaying) {
+            renderCard(); // 调用renderCard会确保卡片是正面，并启动第一个定时器
+        } else {
+            clearTimeout(state.autoplay.timerId);
+        }
+    }
+
+    function saveAutoplaySettings() {
+        const settings = {
+            direction: state.autoplay.direction,
+            frontDuration: state.autoplay.frontDuration,
+            backDuration: state.autoplay.backDuration,
+        };
+        localStorage.setItem('wortschatz_autoplay_settings', JSON.stringify(settings));
+    }
+
+    function loadAutoplaySettings() {
+        const saved = JSON.parse(localStorage.getItem('wortschatz_autoplay_settings'));
+        if (saved) {
+            state.autoplay.direction = saved.direction || 'forward';
+            state.autoplay.frontDuration = saved.frontDuration || 3;
+            state.autoplay.backDuration = saved.backDuration || 5;
+        }
+        els.frontDurationInput.value = state.autoplay.frontDuration;
+        els.backDurationInput.value = state.autoplay.backDuration;
+        els.autoplayDirForward.classList.toggle('active', state.autoplay.direction === 'forward');
+        els.autoplayDirBackward.classList.toggle('active', state.autoplay.direction === 'backward');
+    }
 
     function init() {
-        // Load saved state
         const savedUrl = localStorage.getItem('wortschatz_url_bedrock');
         if (savedUrl) {
             els.sheetUrl.value = savedUrl;
             loadVocabulary();
         }
         updateStats();
-
+        loadAutoplaySettings();
+        
         // Setup all event listeners
         els.loadBtn.addEventListener('click', loadVocabulary);
         els.flashcard.addEventListener('click', (e) => {
@@ -228,11 +303,8 @@ document.addEventListener('DOMContentLoaded', () => {
         els.favoriteBtn.addEventListener('click', () => {
             const word = state.displayedWords[state.currentIndex];
             if (!word) return;
-            if (state.favorites.has(word.id)) {
-                state.favorites.delete(word.id);
-            } else {
-                state.favorites.add(word.id);
-            }
+            if (state.favorites.has(word.id)) state.favorites.delete(word.id);
+            else state.favorites.add(word.id);
             localStorage.setItem('wortschatz_favorites_bedrock', JSON.stringify(Array.from(state.favorites)));
             els.favoriteBtn.classList.toggle('active');
         });
@@ -241,10 +313,42 @@ document.addEventListener('DOMContentLoaded', () => {
             if (word) new Audio(`/api/tts/${encodeURIComponent(word.german)}`).play();
         });
         els.submitAnswerBtn.addEventListener('click', checkAnswer);
-        els.answerInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') checkAnswer();
-        });
+        els.answerInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') checkAnswer(); });
         els.cardCounter.addEventListener('click', showJumpInput);
+
+        els.autoplayToggleBtn.addEventListener('click', toggleAutoplay);
+        els.autoplayDirForward.addEventListener('click', () => {
+            state.autoplay.direction = 'forward';
+            els.autoplayDirForward.classList.add('active');
+            els.autoplayDirBackward.classList.remove('active');
+            saveAutoplaySettings();
+        });
+        els.autoplayDirBackward.addEventListener('click', () => {
+            state.autoplay.direction = 'backward';
+            els.autoplayDirBackward.classList.add('active');
+            els.autoplayDirForward.classList.remove('active');
+            saveAutoplaySettings();
+        });
+        els.frontDurationInput.addEventListener('change', () => {
+            state.autoplay.frontDuration = parseInt(els.frontDurationInput.value) || 3;
+            saveAutoplaySettings();
+        });
+        els.backDurationInput.addEventListener('change', () => {
+            state.autoplay.backDuration = parseInt(els.backDurationInput.value) || 5;
+            saveAutoplaySettings();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (document.activeElement.tagName === 'INPUT') return;
+            switch (e.key) {
+                case 'ArrowRight': navigate('next'); break;
+                case 'ArrowLeft': navigate('prev'); break;
+                case 'Enter': case ' ': e.preventDefault(); els.flashcard.classList.toggle('is-flipped'); break;
+                case 'f': case 'F': els.favoriteBtn.click(); break;
+                case 'p': case 'P': els.pronounceBtn.click(); break;
+                case 'a': case 'A': toggleAutoplay(); break;
+            }
+        });
 
         feather.replace();
     }

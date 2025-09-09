@@ -1,6 +1,7 @@
 <!-- File: app/templates/index.html (V11.1 - With Jump-to-Word) -->
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://unpkg.com/feather-icons"></script>
 </head>
+
 <body>
     <header class="app-header">
         <div class="title-bar">
@@ -32,7 +34,7 @@
 
     <main class="app-main">
         <div id="status-bar" class="status-bar">请输入您的Google Sheet链接，然后点击“加载/刷新”。</div>
-        
+
         <div id="flashcard-container" class="flashcard-container hidden">
             <div id="flashcard" class="flashcard">
                 <div class="card-face card-front">
@@ -64,10 +66,34 @@
             <span id="card-counter" title="点击跳转">0 / 0</span>
             <button id="next-btn">→</button>
         </div>
+        <!-- [新增] Autoplay Controls -->
+        <div id="autoplay-controls" class="autoplay-controls hidden">
+            <div class="autoplay-main">
+                <button id="autoplay-toggle-btn" title="开始/暂停自动播放 (A)"><i data-feather="play"></i></button>
+            </div>
+            <div id="autoplay-settings" class="autoplay-settings collapsed">
+                <div class="autoplay-setting">
+                    <label>方向:</label>
+                    <button id="autoplay-dir-backward" class="direction-btn" title="向后播放"><i
+                            data-feather="rewind"></i></button>
+                    <button id="autoplay-dir-forward" class="direction-btn active" title="向前播放"><i
+                            data-feather="fast-forward"></i></button>
+                </div>
+                <div class="autoplay-setting">
+                    <label for="front-duration">正面停留:</label>
+                    <input type="number" id="front-duration" min="1" value="3"> 秒
+                </div>
+                <div class="autoplay-setting">
+                    <label for="back-duration">背面停留:</label>
+                    <input type="number" id="back-duration" min="1" value="5"> 秒
+                </div>
+            </div>
+        </div>
     </main>
-    
+
     <div id="feedback-overlay" class="feedback-overlay"></div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
+
 </html>
